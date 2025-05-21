@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: timescaledb
+    environment:
+      POSTGRES_USER: tsadmin
+      POSTGRES_PASSWORD: tspassword
+      POSTGRES_DB: tsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "tsadmin", "-d", "tsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build: ./collector
+    container_name: collector
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      - DB_HOST=timescaledb
+      - DB_PORT=5432
+      - DB_NAME=tsdb
+      - DB_USER=tsadmin
+      - DB_PASS=tspassword
+      - HIST_BARS=10000
+      - MAX_ROWS_PER_SYMBOL=10000
+    volumes:
+      - ./collector/csv_archives:/app/csv_archives
+    working_dir: /app
+  ws_streamer:
+    build: ./collector
+    container_name: ws_streamer
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      - DB_HOST=timescaledb
+      - DB_PORT=5432
+      - DB_NAME=tsdb
+      - DB_USER=tsadmin
+      - DB_PASS=tspassword
+    working_dir: /app
+    command: python streamer_ws.py
