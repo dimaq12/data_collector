@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from config import DB, MONETS, HIST_BARS, DAYS_TO_CHECK, MAX_ROWS_PER_SYMBOL, CSV_ARCHIVE_PATH, LOG_LEVEL
 from db import get_conn, init_db, purge_old_rows, get_earliest_bar_ts, get_latest_bar_ts, get_timestamps_in_range
 from data_worker import import_csv_files, fetch_history, scan_data_integrity, repair_gaps
-from btc_dom import fetch_btc_dominance
 from db import count_rows
 import pandas as pd
 
@@ -101,15 +100,6 @@ def orchestrate_eternal_sync():
                     'final_missing': missing_bars,
                     'fail_reason': fail_reason
                 }
-
-            btc_dom_report = ""
-            try:
-                dom_val = fetch_btc_dominance(conn, logger)
-                btc_dom_report = f"  Current dominance: {dom_val}"
-            except Exception as e:
-                btc_dom_report = f"  Error fetching BTC dominance: {e}"
-
-            generate_report(reports, btc_dom_report)
             conn.close()
         except Exception as e:
             logger.critical(f"CRITICAL: {e}")

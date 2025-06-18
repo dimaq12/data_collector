@@ -30,8 +30,8 @@ services:
       - DB_NAME=tsdb
       - DB_USER=tsadmin
       - DB_PASS=tspassword
-      - HIST_BARS=10000
-      - MAX_ROWS_PER_SYMBOL=10000
+      - HIST_BARS=300000
+      - MAX_ROWS_PER_SYMBOL=300000
     volumes:
       - ./collector/csv_archives:/app/csv_archives
     working_dir: /app
@@ -49,3 +49,15 @@ services:
       - DB_PASS=tspassword
     working_dir: /app
     command: python streamer_ws.py
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - timescaledb
+    volumes:
+      - ./pgadmin_data:/var/lib/pgadmin

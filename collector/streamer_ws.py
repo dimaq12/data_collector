@@ -51,4 +51,4 @@ async def main():
     await asyncio.gather(*[listen_symbol(sym, INTERVAL) for sym in MONETS])
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) 
