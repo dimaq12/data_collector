@@ -8,12 +8,12 @@ DB = {
     'password': os.environ.get('DB_PASS', 'tspassword')
 }
 
-MONETS = [
+SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "DOGEUSDT", "BNBUSDT", "SOLUSDT"
 ]
 
-INTERVAL = "1m"
-HIST_BARS = int(os.environ.get('HIST_BARS', 30_000))  # уменьшили
+INTERVALS = ["1m", "5m", "15m", "30m", "1h"]
+HIST_BARS = int(os.environ.get('HIST_BARS', 300_000))
 DAYS_TO_CHECK = int(os.environ.get('DAYS_TO_CHECK', 2))
 MAX_ROWS_PER_SYMBOL = int(os.environ.get('MAX_ROWS_PER_SYMBOL', 30_000))
 CSV_ARCHIVE_PATH = os.environ.get('CSV_ARCHIVE_PATH', 'csv_archives')

@@ -1,19 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-CREATE TABLE IF NOT EXISTS trades (
-  timestamp TIMESTAMPTZ NOT NULL,
-  unix BIGINT,
-  symbol TEXT NOT NULL,
-  open DOUBLE PRECISION,
-  high DOUBLE PRECISION,
-  low DOUBLE PRECISION,
-  close DOUBLE PRECISION,
-  volume_btc DOUBLE PRECISION,
-  volume_usd DOUBLE PRECISION,
-  PRIMARY KEY (symbol, timestamp)
-);
-
-SELECT create_hypertable('trades', 'timestamp');
 
 -- 1-Minute Bars
 CREATE TABLE IF NOT EXISTS trades_1m (
@@ -23,8 +9,8 @@ CREATE TABLE IF NOT EXISTS trades_1m (
   high        DOUBLE PRECISION,
   low         DOUBLE PRECISION,
   close       DOUBLE PRECISION,
-  volume_btc  DOUBLE PRECISION,
-  volume_usd  DOUBLE PRECISION,
+  volume_base  DOUBLE PRECISION,
+  volume_quote  DOUBLE PRECISION,
   PRIMARY KEY (symbol, bucket)
 );
 SELECT create_hypertable('trades_1m', 'bucket');
@@ -37,8 +23,8 @@ CREATE TABLE IF NOT EXISTS trades_5m (
   high        DOUBLE PRECISION,
   low         DOUBLE PRECISION,
   close       DOUBLE PRECISION,
-  volume_btc  DOUBLE PRECISION,
-  volume_usd  DOUBLE PRECISION,
+  volume_base  DOUBLE PRECISION,
+  volume_quote  DOUBLE PRECISION,
   PRIMARY KEY (symbol, bucket)
 );
 SELECT create_hypertable('trades_5m', 'bucket');
@@ -51,8 +37,8 @@ CREATE TABLE IF NOT EXISTS trades_15m (
   high        DOUBLE PRECISION,
   low         DOUBLE PRECISION,
   close       DOUBLE PRECISION,
-  volume_btc  DOUBLE PRECISION,
-  volume_usd  DOUBLE PRECISION,
+  volume_base  DOUBLE PRECISION,
+  volume_quote  DOUBLE PRECISION,
   PRIMARY KEY (symbol, bucket)
 );
 SELECT create_hypertable('trades_15m', 'bucket');
@@ -65,8 +51,8 @@ CREATE TABLE IF NOT EXISTS trades_30m (
   high        DOUBLE PRECISION,
   low         DOUBLE PRECISION,
   close       DOUBLE PRECISION,
-  volume_btc  DOUBLE PRECISION,
-  volume_usd  DOUBLE PRECISION,
+  volume_base  DOUBLE PRECISION,
+  volume_quote  DOUBLE PRECISION,
   PRIMARY KEY (symbol, bucket)
 );
 SELECT create_hypertable('trades_30m', 'bucket');
@@ -79,8 +65,8 @@ CREATE TABLE IF NOT EXISTS trades_1h (
   high        DOUBLE PRECISION,
   low         DOUBLE PRECISION,
   close       DOUBLE PRECISION,
-  volume_btc  DOUBLE PRECISION,
-  volume_usd  DOUBLE PRECISION,
+  volume_base  DOUBLE PRECISION,
+  volume_quote  DOUBLE PRECISION,
   PRIMARY KEY (symbol, bucket)
 );
 SELECT create_hypertable('trades_1h', 'bucket');
