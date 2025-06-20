@@ -1,118 +1,105 @@
 import logging
 import time
-from datetime import datetime, timedelta
-import pandas as pd
-
-from config import DB, SYMBOLS, HIST_BARS, DAYS_TO_CHECK, MAX_ROWS_PER_SYMBOL, CSV_ARCHIVE_PATH, LOG_LEVEL, INTERVALS
-from db import (
-    get_conn, init_db, purge_old_rows,
-    get_earliest_bar_ts, get_latest_bar_ts,
-    get_timestamps_in_range, count_rows
-)
-from data_worker import (
-    import_csv_files, fetch_history,
-    scan_data_integrity, repair_gaps
-)
-from utils import normalize_timestamp
+import signal
+import sys
+from config import DB, SYMBOLS, INTERVALS, CSV_ARCHIVE_PATH, LOG_LEVEL, HIST_BARS
+from db import get_conn, init_db
+from data_integrity import DataIntegrity
 
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger("orchestrator")
 
 SYNC_SLEEP_SEC = 60
+stop_signal_received = False
+conn = None  # глобальное соединение
 
+def handle_exit(signum, frame):
+    global stop_signal_received
+    logger.info(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+    stop_signal_received = True
 
-def count_missing_bars(conn, symbol, interval, since, until):
-    delta = pd.Timedelta(minutes=int(interval[:-1]) if interval.endswith('m') else int(interval[:-1]) * 60)
-    since = normalize_timestamp(since, interval)
-    until = normalize_timestamp(until, interval)
-    expected = pd.date_range(since, until, freq=delta, tz="UTC")
-    got = set(normalize_timestamp(ts, interval) for ts in get_timestamps_in_range(conn, symbol, since, until, interval))
-    missing = [ts for ts in expected if ts not in got]
-    return len(missing)
+signal.signal(signal.SIGINT, handle_exit)
+signal.signal(signal.SIGTERM, handle_exit)
 
+def orchestrate_clean_sync():
+    global conn
 
-def generate_report(reports):
-    lines = ["\n====== SYNC REPORT ======"]
-    for key, info in reports.items():
-        lines.append(f"--- {key} ---")
-        lines.append(f"  Total rows:   {info['total_rows']}")
-        lines.append(f"  Missing bars: {info['missing_bars']}")
-        if info['missing_bars'] > 0:
-            lines.append(f"  Repair attempts: {info['repair_attempts']}")
-            lines.append(f"  Still missing:   {info['final_missing']}")
-            if info.get('fail_reason'):
-                lines.append(f"  Fail reason: {info['fail_reason']}")
-        else:
-            lines.append("  Status: OK")
-        lines.append("")
-    lines.append("===== END OF REPORT =====\n")
-    logger.info("\n".join(lines))
+    logger.info("🚀 Starting clean sync loop...")
 
+    # ленивый кеш экземпляров DataIntegrity
+    di_map: dict[tuple[str,str], DataIntegrity] = {}
 
-def orchestrate_eternal_sync():
-    logger.info("Starting eternal sync loop...")
-    while True:
-        try:
-            conn = get_conn(DB)
-            init_db(conn, INTERVALS)
+    try:
+        conn = get_conn(DB)
+        init_db(conn, INTERVALS)
 
-            for interval in INTERVALS:
-                import_csv_files(conn, CSV_ARCHIVE_PATH, interval, logger)
+        while not stop_signal_received:
+            all_dummy_segments = []
 
-                reports = {}
+            for symbol in SYMBOLS:
+                for interval in INTERVALS:
+                    key = (symbol, interval)
+                    if key not in di_map:
+                        di_map[key] = DataIntegrity(
+                            symbol=symbol,
+                            interval=interval,
+                            hist_bars=HIST_BARS,
+                            conn=conn,
+                            logger=logger,
+                            verbose=False
+                        )
+                    di = di_map[key]
 
-                for symbol in SYMBOLS:
-                    fetch_history(conn, symbol, HIST_BARS, interval, logger)
+                    logger.info(f"\n⏳ Syncing {symbol} [{interval}]")
 
-                    now = normalize_timestamp(pd.Timestamp.utcnow(), interval)
-                    since = now - timedelta(days=DAYS_TO_CHECK)
-                    until = now
+                    # сброс временных полей
+                    di.scan_log.clear()
+                    di.gap_chunks.clear()
+                    di.filled.clear()
+                    di.inserted = 0
+                    di.state = "pending"
 
-                    repair_attempts = 0
-                    fail_reason = None
-                    max_attempts = 5
+                    di.sync(CSV_ARCHIVE_PATH)
+                    di.validate()
 
-                    missing_bars = count_missing_bars(conn, symbol, interval, since, until)
-
-                    while missing_bars > 0 and repair_attempts < max_attempts:
-                        repair_gaps(conn, symbol, since, until, interval, logger)
-                        repair_attempts += 1
-                        missing_bars = count_missing_bars(conn, symbol, interval, since, until)
-
-                    try:
-                        purge_old_rows(conn, symbol, MAX_ROWS_PER_SYMBOL, interval)
-                    except Exception as e:
-                        fail_reason = f"Purge failed: {e}"
-
-                    min_ts = get_earliest_bar_ts(conn, symbol, interval)
-                    max_ts = get_latest_bar_ts(conn, symbol, interval)
-
-                    if min_ts and max_ts:
-                        since = normalize_timestamp(min_ts, interval)
-                        until = normalize_timestamp(max_ts, interval)
-                        missing_bars = count_missing_bars(conn, symbol, interval, since, until)
-                        if missing_bars > 0:
-                            repair_gaps(conn, symbol, since, until, interval, logger)
-                            missing_bars = count_missing_bars(conn, symbol, interval, since, until)
+                    report = di.to_report()
+                    if report["state"] == "integrated":
+                        logger.info(f"✅ {symbol} [{interval}] fully synced")
                     else:
-                        fail_reason = "No data after purge"
+                        logger.warning(f"⚠️ {symbol} [{interval}] issues: {report}")
 
-                    total_rows = count_rows(conn, symbol, interval)
-                    reports[f"{symbol}_{interval}"] = {
-                        'total_rows': total_rows,
-                        'missing_bars': missing_bars,
-                        'repair_attempts': repair_attempts,
-                        'final_missing': missing_bars,
-                        'fail_reason': fail_reason
-                    }
+                    dummy_segs = di.report_dummy_segments()
+                    if dummy_segs:
+                        all_dummy_segments.append({
+                            "symbol": symbol,
+                            "interval": interval,
+                            "segments": dummy_segs
+                        })
 
-                generate_report(reports)
-            conn.close()
+            if all_dummy_segments:
+                logger.info("\n=== Final Dummy-Segments Report ===")
+                for item in all_dummy_segments:
+                    sym, inter, segs = item["symbol"], item["interval"], item["segments"]
+                    logger.info(f"{sym} [{inter}]:")
+                    for seg in segs:
+                        logger.info(
+                            f"  • {seg['start']} → {seg['end']} ({seg['count']} bars)"
+                        )
+            else:
+                logger.info("✅ No zero-volume segments found in this run.")
 
-        except Exception as e:
-            logger.critical(f"CRITICAL: {e}")
-        time.sleep(SYNC_SLEEP_SEC)
+            time.sleep(SYNC_SLEEP_SEC)
 
+    except Exception as e:
+        logger.critical(f"🔥 CRITICAL ERROR in orchestrator: {e}")
+
+    finally:
+        if conn:
+            try:
+                conn.close()
+                logger.info("🔌 Database connection closed.")
+            except Exception as e:
+                logger.warning(f"⚠️ Error during DB close: {e}")
 
 if __name__ == "__main__":
-    orchestrate_eternal_sync()
+    orchestrate_clean_sync()

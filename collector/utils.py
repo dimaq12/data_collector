@@ -26,3 +26,27 @@ def normalize_timestamp(ts, interval: str) -> pd.Timestamp:
         raise ValueError(f"Unsupported interval format: {interval}")
 
     return ts.floor(step)
+
+
+def normalize_since(ts: pd.Timestamp, interval: str) -> pd.Timestamp:
+    if interval.endswith("m"):
+        step = int(interval[:-1])
+        minute = (ts.minute // step) * step
+        return ts.replace(minute=minute, second=0, microsecond=0)
+    elif interval.endswith("h"):
+        step = int(interval[:-1])
+        hour = (ts.hour // step) * step
+        return ts.replace(hour=hour, minute=0, second=0, microsecond=0)
+    else:
+        raise ValueError(f"Unsupported interval: {interval}")
+
+def normalize_until(ts: pd.Timestamp, interval: str) -> pd.Timestamp:
+    ts = normalize_since(ts, interval)
+    if interval.endswith("m"):
+        step = int(interval[:-1])
+        return ts - pd.Timedelta(minutes=step)
+    elif interval.endswith("h"):
+        step = int(interval[:-1])
+        return ts - pd.Timedelta(hours=step)
+    else:
+        raise ValueError(f"Unsupported interval: {interval}")
