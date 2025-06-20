@@ -27,7 +27,7 @@ class DataIntegrity:
         conn,
         logger: logging.Logger,
         verbose: bool = False,
-        fill_empty: bool = True  # <-- режим пустышек по умолчанию включён
+        fill_empty: bool = True 
     ):
         self.symbol = symbol
         self.interval = interval
