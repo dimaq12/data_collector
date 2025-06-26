@@ -2,11 +2,12 @@ import logging
 import time
 import signal
 import sys
-from config import DB, SYMBOLS, INTERVALS, CSV_ARCHIVE_PATH, LOG_LEVEL, HIST_BARS
+from config import DB, SYMBOLS, INTERVALS, CSV_ARCHIVE_PATH, HIST_BARS
+from logger import setup_logging
 from db import get_conn, init_db
 from data_integrity import DataIntegrity
 
-logging.basicConfig(level=LOG_LEVEL)
+setup_logging()
 logger = logging.getLogger("orchestrator")
 
 SYNC_SLEEP_SEC = 60

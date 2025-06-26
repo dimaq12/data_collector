@@ -19,3 +19,4 @@ MAX_ROWS_PER_SYMBOL = int(os.environ.get('MAX_ROWS_PER_SYMBOL', 30_000))
 CSV_ARCHIVE_PATH = os.environ.get('CSV_ARCHIVE_PATH', 'csv_archives')
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+LOG_FORMAT = os.environ.get('LOG_FORMAT', 'plain')

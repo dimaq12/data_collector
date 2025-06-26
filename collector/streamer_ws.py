@@ -3,10 +3,11 @@ import json
 import logging
 import websockets
 from db import get_conn, insert_trade
-from config import DB, SYMBOLS, INTERVALS 
+from config import DB, SYMBOLS, INTERVALS
 from utils import normalize_timestamp
+from logger import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 logger = logging.getLogger("ws_streamer")
 
 async def listen_symbol(symbol, interval):
