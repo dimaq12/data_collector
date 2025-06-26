@@ -189,6 +189,18 @@ class DataIntegrity:
                         self.logger.debug(
                             f"🆕 Inserting {len(missing)} empty candles for {start}→{end - self.delta}"
                         )
+                        ratio = len(missing) / len(expected_timestamps)
+                        if ratio > 0.2:
+                            self.logger.warning(
+                                "⚠️ More than 20% bars missing",
+                                extra={
+                                    "symbol": self.symbol,
+                                    "interval": self.interval,
+                                    "start": start,
+                                    "end": end - self.delta,
+                                    "missing_ratio": round(ratio, 3),
+                                },
+                            )
 
                 # реальные бары
                 real_rows = self._bars_to_rows(bars_in_gap)
@@ -333,9 +345,11 @@ class DataIntegrity:
             "limit":     limit
         }
         prepared = requests.Request("GET", url, params=params).prepare()
-        self.logger.debug(f"▶️ Request URL: {prepared.url}")
+        self.logger.debug(f"▶️ Binance request", extra={"url": prepared.url, "params": params})
         resp = requests.get(url, params=params, timeout=15)
-        self.logger.debug(f"🔹 Status: {resp.status_code}, length: {len(resp.text)}")
+        self.logger.debug(
+            f"🔹 Response", extra={"status": resp.status_code, "length": len(resp.text)}
+        )
         data = resp.json()
         if isinstance(data, list) and data:
             first_ts = pd.to_datetime(data[0][0], unit="ms", utc=True)
@@ -344,6 +358,11 @@ class DataIntegrity:
         elif isinstance(data, dict) and data.get("code"):
             self.logger.error(f"⚠️ Binance error: {data}")
             raise ValueError(f"Binance error: {data}")
+        elif isinstance(data, list) and not data:
+            self.logger.warning(
+                "⚠️ Binance returned 0 bars",
+                extra={"params": params}
+            )
         return data
 
     def _bars_to_rows(self, bars) -> list:
